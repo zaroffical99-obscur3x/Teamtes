@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obscur3x // Red Team Initiate</title>
+<style>
+  :root{
+    --void:#08050f;
+    --void-2:#120a24;
+    --panel:#160f2b;
+    --violet:#8b5cf6;
+    --violet-bright:#a78bfa;
+    --magenta:#d946ef;
+    --lavender:#c9bdfc;
+    --ghost:#6f6490;
+    --ink:#f2effc;
+    --line:rgba(167,139,250,0.18);
+    --glow: 0 0 24px rgba(139,92,246,0.45);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html{scroll-behavior:smooth;}
+
+  ::selection{background:var(--magenta);color:var(--void);}
+
+  ::-webkit-scrollbar{width:10px;}
+  ::-webkit-scrollbar-track{background:var(--void);}
+  ::-webkit-scrollbar-thumb{background:linear-gradient(var(--violet),var(--magenta));border-radius:8px;}
+
+  body{
+    background:var(--void);
+    color:var(--ink);
+    font-family:'Segoe UI', system-ui, sans-serif;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  @font-face{
+    font-family:'JetBrains Mono';
+    src:local('JetBrains Mono');
+  }
+
+  /* ---------- Ambient background ---------- */
+  .bg-grid{
+    position:fixed;inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:radial-gradient(circle at 50% 20%, black 0%, transparent 75%);
+    opacity:0.5;
+    z-index:0;
+    pointer-events:none;
+  }
+
+  .bg-glow{
+    position:fixed;inset:0;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(139,92,246,0.20), transparent 40%),
+      radial-gradient(circle at 85% 30%, rgba(217,70,239,0.14), transparent 45%),
+      radial-gradient(circle at 50% 90%, rgba(139,92,246,0.16), transparent 50%);
+    z-index:0;
+    pointer-events:none;
+  }
+
+  .scanlines{
+    position:fixed;inset:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.015) 0px,
+      rgba(255,255,255,0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    z-index:1;
+    pointer-events:none;
+    opacity:0.6;
+  }
+
+  .noise-vignette{
+    position:fixed;inset:0;
+    box-shadow:inset 0 0 220px rgba(0,0,0,0.85);
+    z-index:1;
+    pointer-events:none;
+  }
+
+  /* ---------- Nav ---------- */
+  nav{
+    position:fixed;top:0;left:0;right:0;
+    z-index:50;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:20px clamp(20px,5vw,64px);
+    backdrop-filter:blur(14px) saturate(140%);
+    background:rgba(8,5,15,0.55);
+    border-bottom:1px solid var(--line);
+    transition:padding 0.3s ease;
+  }
+
+  .brand{
+    font-family:'Courier New', monospace;
+    font-weight:700;
+    letter-spacing:0.08em;
+    font-size:18px;
+    color:var(--ink);
+    display:flex;align-items:center;gap:10px;
+  }
+  .brand .dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--violet-bright);
+    box-shadow:0 0 10px var(--violet-bright), 0 0 20px var(--violet);
+    animation:pulse-dot 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse-dot{
+    0%,100%{opacity:1;transform:scale(1);}
+    50%{opacity:0.5;transform:scale(0.8);}
+  }
+
+  .navlinks{display:flex;gap:34px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;}
+  .navlinks a{
+    color:var(--ghost);
+    text-decoration:none;
+    position:relative;
+    padding-bottom:4px;
+    transition:color 0.25s ease;
+    font-family:'Courier New', monospace;
+  }
+  .navlinks a::after{
+    content:'';position:absolute;left:0;bottom:0;
+    width:0%;height:1px;
+    background:linear-gradient(90deg,var(--violet-bright),var(--magenta));
+    transition:width 0.3s ease;
+  }
+  .navlinks a:hover{color:var(--ink);}
+  .navlinks a:hover::after{width:100%;}
+
+  @media (max-width:720px){ .navlinks{display:none;} }
+
+  /* ---------- Layout helpers ---------- */
+  section{
+    position:relative;z-index:2;
+    max-width:1100px;
+    margin:0 auto;
+    padding:120px 24px;
+  }
+
+  .eyebrow{
+    font-family:'Courier New', monospace;
+    font-size:12px;
+    letter-spacing:0.3em;
+    text-transform:uppercase;
+    color:var(--violet-bright);
+    display:flex;align-items:center;gap:12px;
+    margin-bottom:18px;
+  }
+  .eyebrow::before{
+    content:'';
+    width:28px;height:1px;
+    background:linear-gradient(90deg, var(--magenta), transparent);
+  }
+
+  h1,h2,h3{font-weight:800;letter-spacing:-0.01em;}
+
+  .reveal{
+    opacity:0;
+    transform:translateY(36px);
+    transition:opacity 0.9s cubic-bezier(.2,.7,.2,1), transform 0.9s cubic-bezier(.2,.7,.2,1);
+  }
+  .reveal.in{opacity:1;transform:translateY(0);}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    min-height:100vh;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    text-align:center;
+    padding-top:140px;
+    position:relative;
+  }
+
+  .hero-tag{
+    font-family:'Courier New', monospace;
+    font-size:13px;
+    color:var(--ghost);
+    letter-spacing:0.25em;
+    text-transform:uppercase;
+    margin-bottom:26px;
+    display:flex;align-items:center;gap:10px;
+    opacity:0;
+    animation:fadeUp 0.8s ease 0.1s forwards;
+  }
+  .hero-tag .blip{
+    width:6px;height:6px;background:var(--magenta);border-radius:50%;
+    box-shadow:0 0 8px var(--magenta);
+    animation:pulse-dot 1.8s ease-in-out infinite;
+  }
+
+  .glitch-name{
+    font-family:'Courier New', monospace;
+    font-size:clamp(52px,11vw,128px);
+    font-weight:800;
+    line-height:0.95;
+    letter-spacing:-0.02em;
+    position:relative;
+    color:var(--ink);
+    text-shadow:0 0 40px rgba(139,92,246,0.35);
+    opacity:0;
+    animation:fadeUp 0.9s ease 0.25s forwards;
+  }
+  .glitch-name span{
+    position:relative;
+    display:inline-block;
+  }
+  .glitch-name .layer{
+    position:absolute;top:0;left:0;width:100%;
+    overflow:hidden;
+    color:var(--ink);
+  }
+  .glitch-name .layer.one{
+    color:var(--magenta);
+    mix-blend-mode:screen;
+    animation:glitch-shift 6s infinite steps(2,end);
+    animation-delay:1.4s;
+  }
+  .glitch-name .layer.two{
+    color:var(--violet-bright);
+    mix-blend-mode:screen;
+    animation:glitch-shift-2 6.5s infinite steps(2,end);
+    animation-delay:1.4s;
+  }
+  @keyframes glitch-shift{
+    0%,92%,100%{ clip-path: inset(0 0 0 0); transform:translate(0,0); opacity:0;}
+    93%{ clip-path: inset(10% 0 60% 0); transform:translate(-3px,-1px); opacity:0.7;}
+    95%{ clip-path: inset(60% 0 5% 0); transform:translate(3px,1px); opacity:0.7;}
+    97%{ clip-path: inset(30% 0 40% 0); transform:translate(-2px,0); opacity:0.5;}
+  }
+  @keyframes glitch-shift-2{
+    0%,90%,100%{ clip-path: inset(0 0 0 0); transform:translate(0,0); opacity:0;}
+    91%{ clip-path: inset(70% 0 5% 0); transform:translate(3px,0); opacity:0.6;}
+    94%{ clip-path: inset(5% 0 75% 0); transform:translate(-3px,1px); opacity:0.6;}
+    96%{ clip-path: inset(45% 0 20% 0); transform:translate(2px,-1px); opacity:0.4;}
+  }
+
+  @keyframes fadeUp{
+    from{opacity:0;transform:translateY(22px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+
+  .hero-sub{
+    margin-top:26px;
+    max-width:560px;
+    color:var(--ghost);
+    font-size:16px;
+    line-height:1.7;
+    opacity:0;
+    animation:fadeUp 0.9s ease 0.45s forwards;
+  }
+  .hero-sub .accent{color:var(--violet-bright);font-weight:600;}
+
+  .terminal{
+    margin-top:44px;
+    width:min(560px,90vw);
+    background:rgba(20,13,38,0.6);
+    border:1px solid var(--line);
+    border-radius:12px;
+    backdrop-filter:blur(10px);
+    text-align:left;
+    overflow:hidden;
+    opacity:0;
+    animation:fadeUp 0.9s ease 0.6s forwards;
+    box-shadow:0 20px 60px -20px rgba(139,92,246,0.35);
+  }
+  .terminal-head{
+    display:flex;align-items:center;gap:8px;
+    padding:11px 14px;
+    background:rgba(139,92,246,0.08);
+    border-bottom:1px solid var(--line);
+  }
+  .terminal-head span{width:10px;height:10px;border-radius:50%;background:#544a72;}
+  .terminal-head .label{
+    margin-left:auto;font-family:'Courier New',monospace;font-size:11px;color:var(--ghost);letter-spacing:0.1em;
+  }
+  .terminal-body{
+    padding:18px 18px 22px;
+    font-family:'Courier New', monospace;
+    font-size:14px;
+    color:var(--lavender);
+    min-height:70px;
+    line-height:1.8;
+  }
+  .terminal-body .prompt{color:var(--magenta);}
+  #typed-line::after{
+    content:'▌';
+    color:var(--violet-bright);
+    animation:blink 1s step-end infinite;
+    margin-left:2px;
+  }
+  @keyframes blink{50%{opacity:0;}}
+
+  .scroll-cue{
+    position:absolute;bottom:36px;left:50%;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    color:var(--ghost);font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.2em;
+    opacity:0;
+    animation:fadeUp 1s ease 1.1s forwards;
+  }
+  .scroll-cue .line{width:1px;height:34px;background:linear-gradient(var(--violet-bright),transparent);animation:scroll-move 2s ease-in-out infinite;}
+  @keyframes scroll-move{0%{transform:scaleY(0.3);transform-origin:top;} 50%{transform:scaleY(1);transform-origin:top;} 51%{transform-origin:bottom;} 100%{transform:scaleY(0.3);transform-origin:bottom;}}
+
+  /* ---------- Section heading ---------- */
+  .head-row{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    margin-bottom:56px;flex-wrap:wrap;gap:16px;
+  }
+  .head-row h2{
+    font-size:clamp(28px,4vw,44px);
+    font-family:'Courier New', monospace;
+  }
+  .head-row .idx{
+    font-family:'Courier New', monospace;
+    color:var(--ghost);
+    font-size:13px;
+  }
+
+  /* ---------- About ---------- */
+  .about-grid{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    gap:56px;
+    align-items:center;
+  }
+  @media (max-width:780px){ .about-grid{grid-template-columns:1fr;} }
+
+  .frame-wrap{
+    position:relative;
+    display:flex;justify-content:center;
+  }
+  .hex-frame{
+    width:240px;height:240px;
+    position:relative;
+    border-radius:28px;
+    padding:4px;
+    background:linear-gradient(140deg,var(--violet) 0%,var(--magenta) 50%, var(--violet-bright) 100%);
+    box-shadow:var(--glow);
+    transition:transform 0.4s cubic-bezier(.2,.8,.2,1), box-shadow 0.4s ease;
+  }
+  .hex-frame:hover{transform:translateY(-6px) rotate(-1deg) scale(1.02);box-shadow:0 0 46px rgba(217,70,239,0.55);}
+  .hex-inner{
+    width:100%;height:100%;
+    border-radius:24px;
+    overflow:hidden;
+    background:
+      linear-gradient(160deg, var(--panel), var(--void-2));
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+  }
+  .hex-inner img{
+    width:100%;height:100%;
+    object-fit:cover;
+    object-position:center;
+    display:block;
+  }
+  .hex-inner .fallback{
+    font-family:'Courier New',monospace;
+    font-size:48px;font-weight:800;color:var(--violet-bright);
+    text-shadow:0 0 20px var(--violet);
+    letter-spacing:0.05em;
+  }
+  .hex-inner .scan{
+    position:absolute;inset:0;
+    background:linear-gradient(transparent, rgba(139,92,246,0.18), transparent);
+    height:40%;
+    animation:scan-sweep 3.4s ease-in-out infinite;
+    pointer-events:none;
+  }
+  @keyframes scan-sweep{
+    0%{transform:translateY(-100%);}
+    100%{transform:translateY(340%);}
+  }
+  .status-chip{
+    position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);
+    background:var(--void);
+    border:1px solid var(--line);
+    padding:6px 14px;border-radius:999px;
+    font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.15em;
+    color:var(--violet-bright);
+    display:flex;align-items:center;gap:7px;
+    white-space:nowrap;
+  }
+  .status-chip .d{width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;}
+
+  .about-copy p{
+    color:var(--ghost);
+    line-height:1.85;
+    font-size:15.5px;
+    margin-bottom:16px;
+  }
+  .about-copy .accent{color:var(--lavender);font-weight:600;}
+  .about-copy .accent-m{color:var(--magenta);font-weight:600;}
+
+  .hold-btn{
+    margin-top:24px;
+    position:relative;
+    display:inline-flex;align-items:center;gap:10px;
+    padding:14px 22px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:rgba(139,92,246,0.06);
+    color:var(--ink);
+    font-family:'Courier New',monospace;
+    font-size:13px;letter-spacing:0.08em;
+    cursor:pointer;
+    overflow:hidden;
+    user-select:none;
+    -webkit-user-select:none;
+    transition:color 0.3s ease, border-color 0.3s ease;
+  }
+  .hold-btn .fill{
+    position:absolute;inset:0;
+    width:0%;
+    background:linear-gradient(90deg,var(--violet),var(--magenta));
+    z-index:0;
+    transition:width 0.05s linear;
+  }
+  .hold-btn span.txt, .hold-btn span.ic{position:relative;z-index:1;}
+  .hold-btn:hover{border-color:var(--violet-bright);}
+  .hold-btn.done{color:var(--void);border-color:transparent;}
+
+  .clue-box{
+    margin-top:16px;
+    max-height:0;
+    overflow:hidden;
+    transition:max-height 0.6s ease, opacity 0.6s ease, margin-top 0.6s ease;
+    opacity:0;
+    border-left:2px solid var(--magenta);
+    padding-left:14px;
+    font-family:'Courier New',monospace;
+    font-size:13px;
+    color:var(--lavender);
+    line-height:1.8;
+  }
+  .clue-box.open{max-height:220px;opacity:1;}
+
+  /* ---------- Timeline ---------- */
+  .timeline{
+    position:relative;
+    padding-left:34px;
+    border-left:1px solid var(--line);
+  }
+  .t-item{
+    position:relative;
+    padding:0 0 44px 26px;
+  }
+  .t-item:last-child{padding-bottom:0;}
+  .t-item::before{
+    content:'';
+    position:absolute;
+    left:-40px;top:2px;
+    width:14px;height:14px;
+    border-radius:4px;
+    background:var(--void);
+    border:2px solid var(--violet-bright);
+    box-shadow:0 0 0 4px rgba(139,92,246,0.12);
+    transform:rotate(45deg);
+    transition:background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .t-item.active::before{
+    background:var(--magenta);
+    box-shadow:0 0 0 5px rgba(217,70,239,0.2), 0 0 16px var(--magenta);
+  }
+  .t-stage{
+    font-family:'Courier New',monospace;
+    font-size:11px;letter-spacing:0.18em;
+    color:var(--ghost);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .t-item.active .t-stage{color:var(--violet-bright);}
+  .t-item h3{font-size:19px;margin-bottom:8px;color:var(--ink);}
+  .t-item p{color:var(--ghost);font-size:14px;line-height:1.7;max-width:520px;}
+  .t-badge{
+    display:inline-block;margin-top:10px;
+    font-family:'Courier New',monospace;font-size:11px;
+    padding:4px 10px;border-radius:6px;
+    border:1px solid var(--line);color:var(--lavender);
+    letter-spacing:0.05em;
+  }
+  .t-item.now .t-badge{border-color:var(--magenta);color:var(--magenta);}
+
+  /* ---------- Cards (tools) ---------- */
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:22px;
+  }
+  @media (max-width:720px){ .card-grid{grid-template-columns:1fr;} }
+
+  .tool-card{
+    position:relative;
+    padding:28px;
+    border-radius:16px;
+    background:linear-gradient(160deg, rgba(139,92,246,0.06), rgba(20,13,38,0.5));
+    border:1px solid var(--line);
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform 0.3s cubic-bezier(.2,.8,.2,1), border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .tool-card:hover{
+    transform:translateY(-4px);
+    border-color:rgba(167,139,250,0.5);
+    box-shadow:0 20px 50px -24px rgba(139,92,246,0.6);
+  }
+  .tool-card:active{transform:translateY(-1px) scale(0.985);}
+  .tool-card .glow-orb{
+    position:absolute;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle, rgba(217,70,239,0.35), transparent 70%);
+    top:-70px;right:-70px;
+    filter:blur(10px);
+    opacity:0;
+    transition:opacity 0.4s ease;
+  }
+  .tool-card:hover .glow-orb{opacity:1;}
+  .tool-card .ripple{
+    position:absolute;border-radius:50%;
+    background:rgba(255,255,255,0.35);
+    transform:scale(0);
+    animation:ripple-anim 0.65s ease-out forwards;
+    pointer-events:none;
+  }
+  @keyframes ripple-anim{
+    to{transform:scale(1);opacity:0;}
+  }
+  .tool-tag{
+    font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.15em;
+    color:var(--violet-bright);text-transform:uppercase;margin-bottom:14px;
+    display:inline-block;
+  }
+  .tool-card h3{font-size:20px;margin-bottom:10px;position:relative;z-index:1;}
+  .tool-card p{color:var(--ghost);font-size:14px;line-height:1.7;position:relative;z-index:1;}
+  .tool-card .arrow{
+    margin-top:18px;display:inline-flex;align-items:center;gap:6px;
+    font-family:'Courier New',monospace;font-size:12px;color:var(--lavender);
+    position:relative;z-index:1;
+  }
+  .tool-card .arrow svg{transition:transform 0.3s ease;}
+  .tool-card:hover .arrow svg{transform:translateX(5px);}
+
+  /* ---------- Squad / Bilal ---------- */
+  .squad-card{
+    display:grid;
+    grid-template-columns:220px 1fr;
+    gap:44px;
+    align-items:center;
+    padding:40px;
+    border-radius:22px;
+    background:linear-gradient(150deg, rgba(139,92,246,0.08), rgba(13,8,26,0.6));
+    border:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  @media (max-width:720px){ .squad-card{grid-template-columns:1fr;text-align:center;padding:30px 24px;} }
+
+  .squad-card::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(circle at 90% 10%, rgba(217,70,239,0.16), transparent 55%);
+    pointer-events:none;
+  }
+
+  .squad-frame{
+    width:180px;height:180px;
+    margin:0 auto;
+    border-radius:20px;
+    padding:3px;
+    background:linear-gradient(140deg,var(--magenta),var(--violet));
+    box-shadow:var(--glow);
+  }
+  .squad-frame .inner{
+    width:100%;height:100%;border-radius:17px;overflow:hidden;
+    background:linear-gradient(160deg, var(--panel), var(--void-2));
+    display:flex;align-items:center;justify-content:center;
+  }
+  .squad-frame img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;}
+  .squad-frame .fallback{font-family:'Courier New',monospace;font-size:36px;font-weight:800;color:var(--magenta);}
+
+  .squad-copy .role{
+    font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.2em;
+    color:var(--magenta);text-transform:uppercase;margin-bottom:10px;
+  }
+  .squad-copy h3{font-size:26px;margin-bottom:12px;}
+  .squad-copy p{color:var(--ghost);line-height:1.8;font-size:15px;margin-bottom:10px;}
+  .squad-copy .traits{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
+  @media (max-width:720px){ .squad-copy .traits{justify-content:center;} }
+  .traits span{
+    font-family:'Courier New',monospace;font-size:11px;
+    padding:6px 12px;border-radius:999px;
+    border:1px solid var(--line);color:var(--lavender);
+  }
+
+  /* ---------- Footer ---------- */
+  footer{
+    position:relative;z-index:2;
+    text-align:center;
+    padding:70px 24px 50px;
+    border-top:1px solid var(--line);
+    font-family:'Courier New',monospace;
+  }
+  footer .sig{font-size:22px;color:var(--ink);letter-spacing:0.05em;margin-bottom:10px;}
+  footer .sig .accent-m{color:var(--magenta);}
+  footer .status{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12px;color:var(--ghost);letter-spacing:0.15em;
+    margin-top:6px;
+  }
+  footer .status .d{width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;}
+</style>
+</head>
+<body>
+
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="scanlines"></div>
+  <div class="noise-vignette"></div>
+
+  <nav>
+    <div class="brand"><span class="dot"></span>OBSCUR3X</div>
+    <div class="navlinks">
+      <a href="#about">About</a>
+      <a href="#journey">Journey</a>
+      <a href="#arsenal">Arsenal</a>
+      <a href="#squad">Squad</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-tag"><span class="blip"></span>SYSTEM // IDENTITY LOADED</div>
+
+    <h1 class="glitch-name">
+      <span>OBSCUR3X
+        <span class="layer one">OBSCUR3X</span>
+        <span class="layer two">OBSCUR3X</span>
+      </span>
+    </h1>
+
+    <p class="hero-sub">
+      Learning to think like the attacker so I can defend like one.
+      Currently building my way from <span class="accent">fundamentals</span> to
+      <span class="accent">red team operations</span>, one certification at a time.
+    </p>
+
+    <div class="terminal">
+      <div class="terminal-head">
+        <span style="background:#e2685f;"></span>
+        <span style="background:#e5c04b;"></span>
+        <span style="background:#5fbd6a;"></span>
+        <div class="label">whoami.sh</div>
+      </div>
+      <div class="terminal-body">
+        <span class="prompt">obscur3x@core:~$</span> <span id="typed-line"></span>
+      </div>
+    </div>
+
+    <div class="scroll-cue">SCROLL<div class="line"></div></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="eyebrow reveal">Profile</div>
+    <div class="head-row reveal">
+      <h2>Who I Am</h2>
+      <div class="idx">FILE_01 / ABOUT</div>
+    </div>
+
+    <div class="about-grid">
+      <div class="frame-wrap reveal">
+        <div class="hex-frame">
+          <div class="hex-inner">
+            <img src="image.PNG" alt="Obscur3x" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentElement.querySelector('.scan').style.display='none';">
+            <div class="fallback" style="display:none;">O3X</div>
+            <div class="scan"></div>
+          </div>
+          <div class="status-chip"><span class="d"></span>ACTIVE</div>
+        </div>
+      </div>
+
+      <div class="about-copy reveal">
+        <p>
+          I go by <span class="accent">Obscur3x</span>. My goal is simple to say and hard to
+          earn — become a <span class="accent-m">Red Teamer</span>. Someone organizations trust
+          to break in before the real attackers do.
+        </p>
+        <p>
+          I've already covered <span class="accent">Cybersecurity Basics</span> and the
+          <span class="accent">Fundamentals / 101</span> certs, worked through
+          <span class="accent">PreSecurity</span>, and I'm currently enrolled in
+          <span class="accent-m">AI/ML Security</span> — learning how offense and defense
+          shift when machine learning enters the picture.
+        </p>
+        <p>
+          Outside of studying, I build things. I put together a downloader site and a set of
+          small security tools — proof that what I'm learning actually works in practice, not
+          just in theory.
+        </p>
+
+        <button class="hold-btn" id="holdBtn">
+          <span class="fill" id="holdFill"></span>
+          <span class="ic">🔓</span>
+          <span class="txt" id="holdTxt">Hold to decrypt status</span>
+        </button>
+
+        <div class="clue-box" id="clueBox">
+          > mission_status: IN_PROGRESS<br>
+          > current_focus: AI/ML_SECURITY<br>
+          > next_target: RED_TEAM_OPS<br>
+          > mindset: never stop breaking things (ethically)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- JOURNEY -->
+  <section id="journey">
+    <div class="eyebrow reveal">Track Record</div>
+    <div class="head-row reveal">
+      <h2>The Journey So Far</h2>
+      <div class="idx">FILE_02 / TIMELINE</div>
+    </div>
+
+    <div class="timeline">
+      <div class="t-item active reveal">
+        <div class="t-stage">Stage 01 — Completed</div>
+        <h3>Cybersecurity Basics</h3>
+        <p>Built the ground-floor understanding of how systems, networks, and attackers actually think.</p>
+        <span class="t-badge">✓ Certified</span>
+      </div>
+
+      <div class="t-item active reveal">
+        <div class="t-stage">Stage 02 — Completed</div>
+        <h3>Fundamentals 101 — Cybersecurity</h3>
+        <p>Solidified the core concepts every security path builds on top of.</p>
+        <span class="t-badge">✓ Certified</span>
+      </div>
+
+      <div class="t-item active reveal">
+        <div class="t-stage">Stage 03 — Completed</div>
+        <h3>PreSecurity</h3>
+        <p>Bridged the gap between fundamentals and hands-on offensive security work.</p>
+        <span class="t-badge">✓ Certified</span>
+      </div>
+
+      <div class="t-item now reveal">
+        <div class="t-stage">Stage 04 — In Progress</div>
+        <h3>AI/ML Security</h3>
+        <p>Currently enrolled — studying how AI systems get attacked, misused, and secured.</p>
+        <span class="t-badge">● Ongoing</span>
+      </div>
+
+      <div class="t-item reveal">
+        <div class="t-stage">Stage 05 — Target</div>
+        <h3>Red Teamer</h3>
+        <p>The destination. Full offensive security operations, done professionally and ethically.</p>
+        <span class="t-badge">◌ Locked</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARSENAL -->
+  <section id="arsenal">
+    <div class="eyebrow reveal">Built By Me</div>
+    <div class="head-row reveal">
+      <h2>Arsenal</h2>
+      <div class="idx">FILE_03 / PROJECTS</div>
+    </div>
+
+    <div class="card-grid">
+      <div class="tool-card reveal">
+        <div class="glow-orb"></div>
+        <span class="tool-tag">Web</span>
+        <h3>Downloader Site</h3>
+        <p>A site I built from the ground up to make downloading content fast, clean, and reliable — one of my favorite builds so far.</p>
+        <div class="arrow">SEE_DETAILS <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      </div>
+
+      <div class="tool-card reveal">
+        <div class="glow-orb"></div>
+        <span class="tool-tag">Security</span>
+        <h3>Custom Tools</h3>
+        <p>A growing collection of small tools built while learning — turning security concepts into working code.</p>
+        <div class="arrow">SEE_DETAILS <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SQUAD -->
+  <section id="squad">
+    <div class="eyebrow reveal">Teammate</div>
+    <div class="head-row reveal">
+      <h2>The Squad</h2>
+      <div class="idx">FILE_04 / ALLY</div>
+    </div>
+
+    <div class="squad-card reveal">
+      <div class="squad-frame">
+        <div class="inner">
+          <img src="bilal.PNG" alt="Bilal" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="fallback" style="display:none;">BLL</div>
+        </div>
+      </div>
+      <div class="squad-copy">
+        <div class="role">Teammate // Friend</div>
+        <h3>Bilal</h3>
+        <p>
+          Bilal is very good and understanding — the kind of person who gets things quickly and
+          never makes it feel complicated. A genuine hard worker.
+        </p>
+        <p>
+          He's currently learning <span style="color:var(--lavender);">Cybersecurity 101</span>,
+          and after that he'll go wherever his interest takes him. We're not just teammates —
+          we're great friends first.
+        </p>
+        <div class="traits">
+          <span>Hard Worker</span>
+          <span>Fast Learner</span>
+          <span>Reliable</span>
+          <span>Great Friend</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="sig">Built by <span class="accent-m" style="color:var(--magenta);">Obscur3x</span></div>
+    <div class="status"><span class="d"></span>SESSION ONLINE // LEARNING NEVER STOPS</div>
+  </footer>
+
+<script>
+  // ---------- Scroll reveal ----------
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if(e.isIntersecting){
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  revealEls.forEach(el => io.observe(el));
+
+  // ---------- Terminal typing effect ----------
+  const lines = [
+    "role: aspiring red teamer",
+    "status: leveling up daily",
+    "focus: AI/ML security",
+    "mindset: break it to understand it"
+  ];
+  const typedEl = document.getElementById('typed-line');
+  let lineIdx = 0, charIdx = 0, deleting = false;
+
+  function typeLoop(){
+    const current = lines[lineIdx];
+    if(!deleting){
+      typedEl.textContent = current.slice(0, charIdx+1);
+      charIdx++;
+      if(charIdx === current.length){
+        deleting = true;
+        setTimeout(typeLoop, 1400);
+        return;
+      }
+    } else {
+      typedEl.textContent = current.slice(0, charIdx-1);
+      charIdx--;
+      if(charIdx === 0){
+        deleting = false;
+        lineIdx = (lineIdx+1) % lines.length;
+      }
+    }
+    setTimeout(typeLoop, deleting ? 28 : 45);
+  }
+  typeLoop();
+
+  // ---------- Hold-to-decrypt button ----------
+  const holdBtn = document.getElementById('holdBtn');
+  const holdFill = document.getElementById('holdFill');
+  const holdTxt = document.getElementById('holdTxt');
+  const clueBox = document.getElementById('clueBox');
+  let holdTimer = null, holdStart = null, holding = false;
+  const HOLD_MS = 900;
+
+  function startHold(){
+    if(holdBtn.classList.contains('done')) return;
+    holding = true;
+    holdStart = performance.now();
+    step();
+  }
+  function step(){
+    if(!holding) return;
+    const elapsed = performance.now() - holdStart;
+    const pct = Math.min(100, (elapsed / HOLD_MS) * 100);
+    holdFill.style.width = pct + '%';
+    if(pct >= 100){
+      completeHold();
+      return;
+    }
+    holdTimer = requestAnimationFrame(step);
+  }
+  function cancelHold(){
+    holding = false;
+    if(holdTimer) cancelAnimationFrame(holdTimer);
+    if(!holdBtn.classList.contains('done')){
+      holdFill.style.width = '0%';
+    }
+  }
+  function completeHold(){
+    holding = false;
+    holdBtn.classList.add('done');
+    holdTxt.textContent = 'Access granted';
+    clueBox.classList.add('open');
+  }
+
+  holdBtn.addEventListener('mousedown', startHold);
+  holdBtn.addEventListener('touchstart', startHold, {passive:true});
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(evt=>{
+    holdBtn.addEventListener(evt, cancelHold);
+  });
+
+  // ---------- Click ripple on tool cards ----------
+  document.querySelectorAll('.tool-card').forEach(card => {
+    card.addEventListener('click', function(e){
+      const rect = card.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      const size = Math.max(rect.width, rect.height) * 1.4;
+      ripple.className = 'ripple';
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+      card.appendChild(ripple);
+      setTimeout(()=> ripple.remove(), 650);
+    });
+  });
+</script>
+
+</body>
+</html>
